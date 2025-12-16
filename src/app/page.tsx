@@ -36,6 +36,7 @@ export default function HomePage() {
 
   // Mapa para rastrear alterações pendentes
   const [pendingChanges, setPendingChanges] = useState<Map<number, ActionOption>>(new Map());
+  const [pendingNotes, setPendingNotes] = useState<Map<number, string>>(new Map());
 
   /**
    * Busca todos os registros da tabela Tag_Mapping
@@ -50,7 +51,7 @@ export default function HomePage() {
         .order('Frequency', { ascending: false });
 
       if (error) {
-        throw new Error(`Error fetching tags: ${error.message}`);
+        throw new Error(`Erro ao buscar tags: ${error.message}`);
       }
 
       // Adiciona propriedades de controle de alterações
@@ -60,6 +61,7 @@ export default function HomePage() {
           ...tagData,
           hasChanges: false,
           originalAction: tagData.Action,
+          originalNotes: tagData.Notes,
         };
       });
 
@@ -69,7 +71,7 @@ export default function HomePage() {
         isLoading: false,
       }));
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -111,7 +113,38 @@ export default function HomePage() {
           ? {
               ...tag,
               Action: action,
-              hasChanges: action !== tag.originalAction,
+              hasChanges: action !== tag.originalAction || pendingNotes.has(tag.id),
+            }
+          : tag
+      ),
+    }));
+  };
+
+  /**
+   * Atualiza as notas de uma tag específica
+   */
+  const handleNotesChange = (id: number, notes: string) => {
+    const newNotes = new Map(pendingNotes);
+    const tag = state.tags.find(t => t.id === id);
+    
+    if (tag) {
+      if (notes !== (tag.originalNotes || '')) {
+        newNotes.set(id, notes);
+      } else {
+        newNotes.delete(id);
+      }
+    }
+    
+    setPendingNotes(newNotes);
+
+    setState(prev => ({
+      ...prev,
+      tags: prev.tags.map(tag =>
+        tag.id === id
+          ? {
+              ...tag,
+              Notes: notes,
+              hasChanges: pendingChanges.has(tag.id) || notes !== (tag.originalNotes || ''),
             }
           : tag
       ),
@@ -122,36 +155,39 @@ export default function HomePage() {
    * Salva todas as alterações pendentes no Supabase
    */
   const handleSave = async () => {
-    if (pendingChanges.size === 0) return;
+    if (pendingChanges.size === 0 && pendingNotes.size === 0) return;
 
     setState(prev => ({ ...prev, isSaving: true }));
 
     try {
-      // Prepara as atualizações para enviar ao Supabase
-      const updates: TagMappingUpdate[] = Array.from(pendingChanges.entries()).map(
-        ([id, action]) => ({
-          id,
-          Action: action || null,
-        })
-      );
-
+      // Coleta todos os IDs que precisam ser atualizados
+      const allIds = new Set([...pendingChanges.keys(), ...pendingNotes.keys()]);
+      
       // Executa as atualizações em batch
-      const promises = updates.map(update =>
-        supabase
+      const promises = Array.from(allIds).map(id => {
+        const updateData: { Action?: string | null; Notes?: string } = {};
+        if (pendingChanges.has(id)) {
+          updateData.Action = pendingChanges.get(id) || null;
+        }
+        if (pendingNotes.has(id)) {
+          updateData.Notes = pendingNotes.get(id) || '';
+        }
+        return supabase
           .from('Tag_Mapping')
-          .update({ Action: update.Action })
-          .eq('id', update.id)
-      );
+          .update(updateData)
+          .eq('id', id);
+      });
 
       const results = await Promise.all(promises);
 
       // Verifica se houve algum erro
       const errors = results.filter(r => r.error);
       if (errors.length > 0) {
-        throw new Error(`Error saving ${errors.length} record(s)`);
+        throw new Error(`Erro ao salvar ${errors.length} registro(s)`);
       }
 
       // Atualiza o estado após salvar com sucesso
+      const totalChanges = new Set([...pendingChanges.keys(), ...pendingNotes.keys()]).size;
       setState(prev => ({
         ...prev,
         isSaving: false,
@@ -161,17 +197,21 @@ export default function HomePage() {
           originalAction: pendingChanges.has(tag.id)
             ? pendingChanges.get(tag.id) || null
             : tag.originalAction,
+          originalNotes: pendingNotes.has(tag.id)
+            ? pendingNotes.get(tag.id) || null
+            : tag.originalNotes,
         })),
         toast: {
-          message: `${pendingChanges.size} change(s) saved successfully!`,
+          message: `${totalChanges} alteração(ões) salva(s) com sucesso!`,
           type: 'success',
         },
       }));
 
       // Limpa as alterações pendentes
       setPendingChanges(new Map());
+      setPendingNotes(new Map());
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error saving';
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao salvar';
       setState(prev => ({
         ...prev,
         isSaving: false,
@@ -211,14 +251,14 @@ export default function HomePage() {
               />
             </svg>
             <h2 className="text-xl font-semibold text-red-800 mb-2">
-              Error loading data
+              Erro ao carregar dados
             </h2>
             <p className="text-red-600 mb-4">{state.error}</p>
             <button
               onClick={fetchTags}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
-              Try again
+              Tentar novamente
             </button>
           </div>
         </main>
@@ -230,23 +270,23 @@ export default function HomePage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full px-4 py-8">
         {/* Estatísticas rápidas */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <StatCard
-            title="Total Tags"
+            title="Total de Tags"
             value={state.tags.length}
             icon="📊"
             color="blue"
           />
           <StatCard
-            title="Approved"
+            title="Aprovadas"
             value={state.tags.filter(t => t.Action === 'Approved').length}
             icon="✓"
             color="green"
           />
           <StatCard
-            title="Rejected"
+            title="Rejeitadas"
             value={state.tags.filter(t => t.Action === 'Reject').length}
             icon="✗"
             color="red"
@@ -258,13 +298,13 @@ export default function HomePage() {
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <h2 className="text-lg font-semibold text-gray-900">
-                Tag Mapping
+                Mapeamento de Tags
               </h2>
               <SaveButton
                 onClick={handleSave}
                 isLoading={state.isSaving}
-                hasChanges={pendingChanges.size > 0}
-                changesCount={pendingChanges.size}
+                hasChanges={pendingChanges.size > 0 || pendingNotes.size > 0}
+                changesCount={new Set([...pendingChanges.keys(), ...pendingNotes.keys()]).size}
               />
             </div>
           </div>
@@ -272,7 +312,11 @@ export default function HomePage() {
           {state.isLoading ? (
             <LoadingSpinner />
           ) : (
-            <TagTable tags={state.tags} onActionChange={handleActionChange} />
+            <TagTable 
+              tags={state.tags} 
+              onActionChange={handleActionChange}
+              onNotesChange={handleNotesChange}
+            />
           )}
         </div>
 
@@ -280,15 +324,15 @@ export default function HomePage() {
         <div className="mt-6 flex flex-wrap gap-4 justify-center text-sm text-gray-600">
           <div className="flex items-center gap-2">
             <span className="w-4 h-4 bg-green-100 border-l-4 border-green-500 rounded"></span>
-            <span>Approved</span>
+            <span>Aprovado</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-4 h-4 bg-red-100 border-l-4 border-red-500 rounded"></span>
-            <span>Rejected</span>
+            <span>Rejeitado</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-4 h-4 bg-white border border-gray-200 rounded"></span>
-            <span>No change</span>
+            <span>Sem alteração</span>
           </div>
         </div>
       </main>

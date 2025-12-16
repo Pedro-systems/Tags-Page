@@ -16,6 +16,7 @@ export interface TagMapping {
   AI_Suggestion: string | null;
   AI_New_Name: string | null;
   AI_Reasoning: string | null;
+  Notes: string | null;
 }
 
 // Tipo para inserção de novos registros
@@ -27,12 +28,14 @@ export interface TagMappingInsert {
   AI_Suggestion?: string | null;
   AI_New_Name?: string | null;
   AI_Reasoning?: string | null;
+  Notes?: string | null;
 }
 
 // Tipo para atualização de registros
 export interface TagMappingUpdate {
   id: number;
-  Action: string | null;
+  Action?: string | null;
+  Notes?: string | null;
 }
 
 // Opções disponíveis para o campo Action
@@ -55,4 +58,5 @@ export interface Database {
 export interface TagMappingWithChanges extends TagMapping {
   hasChanges?: boolean;
   originalAction?: string | null;
+  originalNotes?: string | null;
 }

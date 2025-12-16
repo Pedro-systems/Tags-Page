@@ -13,33 +13,37 @@ import type { TagMappingWithChanges, ActionOption } from '@/types/database';
 interface TagTableProps {
   tags: TagMappingWithChanges[];
   onActionChange: (id: number, action: ActionOption) => void;
+  onNotesChange: (id: number, notes: string) => void;
 }
 
-export default function TagTable({ tags, onActionChange }: TagTableProps) {
+export default function TagTable({ tags, onActionChange, onNotesChange }: TagTableProps) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="w-full">
+      <table className="w-full divide-y divide-gray-200 table-fixed">
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[12%]">
               Old Tag
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[8%]">
               New Tag
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[7%]">
               Frequency
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[8%]">
               AI Suggestion
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[12%]">
               AI New Name
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[18%]">
               AI Reasoning
             </th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[18%]">
+              Notes
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-[12%]">
               Action
             </th>
           </tr>
@@ -51,6 +55,7 @@ export default function TagTable({ tags, onActionChange }: TagTableProps) {
               tag={tag}
               index={index}
               onActionChange={onActionChange}
+              onNotesChange={onNotesChange}
             />
           ))}
         </tbody>
@@ -70,12 +75,14 @@ interface TagRowProps {
   tag: TagMappingWithChanges;
   index: number;
   onActionChange: (id: number, action: ActionOption) => void;
+  onNotesChange: (id: number, notes: string) => void;
 }
 
-function TagRow({ tag, index, onActionChange }: TagRowProps) {
+function TagRow({ tag, index, onActionChange, onNotesChange }: TagRowProps) {
   const [currentAction, setCurrentAction] = useState<ActionOption>(
     (tag.Action as ActionOption) || ''
   );
+  const [currentNotes, setCurrentNotes] = useState<string>(tag.Notes || '');
 
   // Determina a cor de fundo baseado na ação selecionada
   const getRowClass = () => {
@@ -109,12 +116,18 @@ function TagRow({ tag, index, onActionChange }: TagRowProps) {
     onActionChange(tag.id, newAction);
   };
 
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newNotes = e.target.value;
+    setCurrentNotes(newNotes);
+    onNotesChange(tag.id, newNotes);
+  };
+
   return (
     <tr className={`${getRowClass()} transition-colors duration-200 hover:bg-gray-100`}>
-      <td className="px-4 py-3 text-sm text-gray-900 font-medium max-w-xs truncate" title={tag.Old_Tag || ''}>
+      <td className="px-4 py-3 text-sm text-gray-900 font-medium truncate" title={tag.Old_Tag || ''}>
         {tag.Old_Tag || '-'}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-700 max-w-xs truncate" title={tag.New_Tag || ''}>
+      <td className="px-4 py-3 text-sm text-gray-700 truncate" title={tag.New_Tag || ''}>
         {tag.New_Tag || '-'}
       </td>
       <td className="px-4 py-3 text-sm text-gray-600">
@@ -122,18 +135,28 @@ function TagRow({ tag, index, onActionChange }: TagRowProps) {
           {tag.Frequency ?? 0}
         </span>
       </td>
-      <td className="px-4 py-3 text-sm text-gray-700 max-w-xs truncate" title={tag.AI_Suggestion || ''}>
+      <td className="px-4 py-3 text-sm text-gray-700 truncate" title={tag.AI_Suggestion || ''}>
         {tag.AI_Suggestion || '-'}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-700 max-w-xs truncate" title={tag.AI_New_Name || ''}>
+      <td className="px-4 py-3 text-sm text-gray-700 truncate" title={tag.AI_New_Name || ''}>
         <span className="inline-flex items-center px-2 py-1 rounded bg-purple-50 text-purple-700 text-xs">
           {tag.AI_New_Name || '-'}
         </span>
       </td>
-      <td className="px-4 py-3 text-sm text-gray-600 max-w-md">
+      <td className="px-4 py-3 text-sm text-gray-600">
         <div className="line-clamp-2" title={tag.AI_Reasoning || ''}>
           {tag.AI_Reasoning || '-'}
         </div>
+      </td>
+      <td className="px-4 py-3 text-sm">
+        <textarea
+          value={currentNotes}
+          onChange={handleNotesChange}
+          placeholder="Add notes..."
+          className="w-full rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 resize-none bg-white"
+          rows={2}
+          aria-label={`Notes for tag ${tag.Old_Tag}`}
+        />
       </td>
       <td className="px-4 py-3 text-sm">
         <select
